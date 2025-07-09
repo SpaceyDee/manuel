@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive UniFi Troubleshooting Manual</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            max-height: 50vh;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; /* slate-100 */ }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; /* slate-400 */ border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; /* slate-500 */ }
+        .filter-btn.active {
+            background-color: #0d9488; /* teal-600 */
+            color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .modal-content { max-height: 80vh; }
+        .prose strong { color: #0f766e; /* teal-700 */ }
+        /* Simple transition for modal */
+        .modal-transition { transition: opacity 0.25s ease, transform 0.25s ease; }
+        .modal-hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
+        .modal-visible { opacity: 1; transform: scale(1); }
+    </style>
+</head>
+<body class="antialiased text-slate-700">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-800">Interactive UniFi Troubleshooting Manual</h1>
+            <p class="mt-2 text-lg text-slate-500">A dynamic, searchable guide for network professionals.</p>
+        </header>
+
+        <!-- Search and Add Button Area -->
+        <div class="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-sm py-4 mb-8">
+            <div class="max-w-4xl mx-auto flex items-center gap-4">
+                <div class="relative flex-grow">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Search by symptom, cause, or solution..." class="w-full p-3 pl-10 border border-slate-300 rounded-full shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-shadow">
+                </div>
+                <button id="add-issue-btn" class="bg-teal-600 text-white px-5 py-3 rounded-full shadow-md hover:bg-teal-700 transition-colors flex-shrink-0">
+                    Add Issue
+                </button>
+            </div>
+        </div>
+
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <aside class="lg:col-span-3">
+                <div class="sticky top-36">
+                    <h2 class="text-lg font-semibold mb-4 text-slate-800">Categories</h2>
+                    <div id="filter-container" class="flex flex-wrap gap-2 lg:flex-col lg:gap-3">
+                        <!-- Filter buttons will be injected here -->
+                    </div>
+
+                    <div class="mt-8">
+                        <h2 class="text-lg font-semibold mb-4 text-slate-800">Issues by Category</h2>
+                        <div class="p-4 bg-white rounded-xl shadow-md">
+                            <div class="chart-container">
+                                <canvas id="category-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <div id="results-container" class="lg:col-span-9">
+                <div id="results-summary" class="mb-4 text-slate-500">Loading issues...</div>
+                <div id="results-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- Troubleshooting cards will be injected here -->
+                </div>
+                 <div id="no-results" class="hidden text-center py-16">
+                    <p class="text-xl font-semibold text-slate-600">No issues found.</p>
+                    <p class="text-slate-500 mt-2">Try adjusting your search or filters.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 modal-transition modal-hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onclick="event.stopPropagation()">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800"></h3>
+                <button onclick="closeModal('detail-modal')" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <div class="p-6 modal-content overflow-y-auto">
+                <div class="mb-6">
+                    <h4 class="font-semibold text-teal-600 mb-2">Symptom</h4>
+                    <p id="modal-symptom" class="text-slate-600"></p>
+                </div>
+                <div class="mb-6">
+                    <h4 class="font-semibold text-orange-600 mb-2">Common Cause</h4>
+                    <p id="modal-cause" class="text-slate-600"></p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-green-600 mb-2">Solution</h4>
+                    <div id="modal-solution" class="prose prose-sm max-w-none text-slate-600"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Issue Modal -->
+    <div id="add-issue-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 modal-transition modal-hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onclick="event.stopPropagation()">
+            <form id="add-issue-form">
+                <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-slate-800">Add New Troubleshooting Issue</h3>
+                    <button type="button" onclick="closeModal('add-issue-modal')" class="text-slate-400 hover:text-slate-600 transition-colors">
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div class="p-6 modal-content overflow-y-auto space-y-4">
+                    <div>
+                        <label for="new-title" class="block text-sm font-medium text-slate-700">Title</label>
+                        <input type="text" id="new-title" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label for="new-category" class="block text-sm font-medium text-slate-700">Category</label>
+                        <input type="text" id="new-category" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label for="new-symptom" class="block text-sm font-medium text-slate-700">Symptom</label>
+                        <textarea id="new-symptom" rows="3" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="new-cause" class="block text-sm font-medium text-slate-700">Common Cause</label>
+                        <textarea id="new-cause" rows="3" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="new-solution" class="block text-sm font-medium text-slate-700">Solution</label>
+                        <textarea id="new-solution" rows="5" required class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"></textarea>
+                        <p class="mt-2 text-xs text-slate-500">Use **text** for bolding.</p>
+                    </div>
+                </div>
+                <div class="p-6 bg-slate-50 border-t border-slate-200 text-right">
+                    <button type="submit" class="bg-teal-600 text-white px-5 py-2 rounded-lg shadow-md hover:bg-teal-700 transition-colors">Save Issue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase services
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, onSnapshot, addDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- FIREBASE CONFIGURATION ---
+        // These variables are provided by the environment.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO", authDomain: "DEMO", projectId: "DEMO" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'unifi-troubleshooting-app';
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- GLOBAL STATE ---
+        let allIssues = []; // This will hold the issues from Firestore
+        let activeCategory = 'All';
+        let chartInstance = null;
+        const issuesCollectionRef = collection(db, `/artifacts/${appId}/public/data/unifi_issues`);
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Authenticate the user
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                document.getElementById('results-summary').textContent = 'Error: Could not authenticate.';
+            }
+
+            // Set up listeners for UI elements
+            document.getElementById('search-input').addEventListener('input', () => renderResults());
+            document.getElementById('add-issue-btn').addEventListener('click', () => openModal('add-issue-modal'));
+            document.getElementById('add-issue-form').addEventListener('submit', handleAddIssue);
+            
+            // Listen for real-time updates from Firestore
+            onSnapshot(issuesCollectionRef, async (snapshot) => {
+                // Check if the collection is empty, and if so, seed it with initial data.
+                if (snapshot.empty) {
+                    document.getElementById('results-summary').textContent = 'Database is empty. Seeding initial data...';
+                    await seedInitialData();
+                    // The snapshot will re-trigger once data is added, so no need to do anything else.
+                    return;
+                }
+
+                allIssues = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Once data is loaded, render everything
+                renderFilters();
+                renderResults();
+                renderChart();
+            }, (error) => {
+                console.error("Error fetching issues: ", error);
+                document.getElementById('results-summary').textContent = 'Error loading data from the database.';
+            });
+        });
+
+        // --- DATA HANDLING ---
+
+        /**
+         * One-time function to seed the database with the initial set of issues.
+         * This will only run if the 'unifi_issues' collection is empty.
+         */
+        async function seedInitialData() {
+            const initialIssues = [
+                { category: 'Wi-Fi', title: 'Clients Connect but Get No Internet', symptom: "Device connects to Wi-Fi, shows full signal, but has no internet access. May have a 169.254.x.x IP address.", cause: "DHCP server failure or exhausted IP address pool.", solution: "Navigate to **Settings > Networks > [Select Network]**. Check the 'DHCP Range'. If the range is too small for the number of clients, expand it. If the server is down, reboot the UniFi gateway or the server acting as the DHCP authority." },
+                { category: 'Wi-Fi', title: 'Poor Wi-Fi Speeds Despite Strong Signal', symptom: "Slow speed tests and downloads despite a strong Wi-Fi signal.", cause: "Co-channel interference.", solution: "In the UniFi Controller, go to the **Devices** tab, select an Access Point, and go to its **Tools** tab. Run an **RF Scan**. Identify the least-congested channels for both 2.4GHz and 5GHz. Manually set the APs to use these channels in **Devices > [Select AP] > Settings > Radios**." },
+                { category: 'Wi-Fi', title: '\"Sticky Clients\" Ruining Roaming', symptom: "A mobile device stays connected to a distant AP instead of roaming to a closer one.", cause: "Poorly configured roaming assistance.", solution: "Enable **Band Steering** to Prefer 5GHz under **Settings > Wi-Fi > [Your SSID] > Advanced**. More effectively, enable **Minimum RSSI** on individual APs (**Devices > [Select AP] > Settings > Radios**). Start with a low value like -75dBm and adjust as needed." },
+                { category: 'Wi-Fi', title: 'Constant Wi-Fi Disconnections', symptom: "Devices randomly drop off the network.", cause: "Unstable power to the AP (check PoE), faulty network cable, or firmware bugs.", solution: "Swap the ethernet cable with a known good one. If using a PoE injector, try a different one. If connected to a PoE switch, try a different port. Check for firmware updates for the AP, as bug fixes often address stability." },
+                { category: 'Wi-Fi', title: 'Certain Devices Refuse to Connect', symptom: "Older or IoT devices fail to connect.", cause: "Advanced features like **WPA3** or **PMF** are enabled, which the device doesn't support.", solution: "Create a new, dedicated SSID for these devices. Set its security to WPA2 and disable PMF (set to 'Disabled'). Alternatively, for the main network, you can use WPA2/WPA3 transition mode." },
+                { category: 'Wi-Fi', title: 'Buffering on Streaming Services', symptom: "Video services constantly buffer.", cause: "High latency ('bufferbloat').", solution: "Navigate to **Settings > Internet > [Select WAN Network]**. Enable **Smart Queues**. The controller will run a speed test and set values automatically. This will limit maximum throughput slightly but dramatically improve latency." },
+                { category: 'Wi-Fi', title: 'Inconsistent Coverage (Wi-Fi \"Dead Zones\")', symptom: "Areas with very weak or no Wi-Fi signal.", cause: "Poor AP placement, new physical obstructions, or incorrect AP transmit power settings.", solution: "Use a Wi-Fi analysis app to map signal strength. Adjust AP placement if possible. In the controller, set AP transmit power to 'Auto' or manually adjust to 'Medium' or 'High' to fill gaps. Consider adding another AP to the dead zone." },
+                { category: 'Wi-Fi', title: 'Band Steering Not Working as Expected', symptom: "5GHz-capable clients remain on the congested 2.4GHz band.", cause: "The 2.4GHz radio's signal is too strong.", solution: "In **Devices > [Select AP] > Settings > Radios**, manually set the 2.4GHz radio power to 'Low' or 'Medium' and the 5GHz radio power to 'High'. This creates a signal strength incentive for clients to choose 5GHz." },
+                { category: 'Wi-Fi', title: 'DFS Channel Delays', symptom: "An AP using a DFS channel is temporarily unavailable after a reboot or power outage.", cause: "This is normal behavior. The AP must scan for radar signals for 1-10 minutes before broadcasting on a DFS channel.", solution: "Be patient and inform users this is expected. If the delay is unacceptable for critical areas, manually set the AP to use a non-DFS channel (e.g., 36, 40, 44, 48, 149, 153, 157, 161)." },
+                { category: 'Wi-Fi', title: 'Specific Client Driver Issues', symptom: "Devices with a particular Wi-Fi chipset have persistent connectivity issues.", cause: "Incompatibility with certain UniFi settings.", solution: "Check for updated Wi-Fi drivers from the client device's manufacturer (e.g., Dell, HP, Intel). As a workaround, create a separate SSID for these devices and disable high-performance features like BSS Transition, Fast Roaming, and PMF." },
+                { category: 'Wi-Fi', title: 'RADIUS Authentication Failures', symptom: "Users cannot connect to an Enterprise SSID; the RADIUS server rejects authentication.", cause: "Mismatched shared secret, incorrect server IP, or firewall blocking RADIUS ports (1812/1813).", solution: "Double-check the shared secret on both the UniFi RADIUS profile and the RADIUS server. Verify the server's IP address is correct. Ensure any firewalls between the APs and the RADIUS server allow UDP traffic on ports 1812 and 1813." },
+                { category: 'Wi-Fi', title: 'Wireless Meshing Instability', symptom: "A wirelessly meshed AP frequently disconnects or has extremely low throughput.", cause: "The AP is too far from its wired uplink, or there is significant interference between the two APs.", solution: "Move the meshed AP closer to its uplink AP. Check the signal strength in the controller; it should be better than -70dBm. Manually set the two APs to a clean, non-overlapping 5GHz channel to improve the wireless backhaul link." },
+                { category: 'Wi-Fi', title: 'Client Isolation Not Working', symptom: "Devices on a guest network can see and interact with each other when they shouldn't.", cause: "The 'Client Isolation' feature is not enabled, or a downstream non-UniFi switch is not honoring the isolation.", solution: "In **Settings > Wi-Fi > [Your Guest SSID]**, enable **Client Isolation**. Ensure all devices are connected to UniFi switches, as this feature may not propagate correctly through third-party hardware." },
+                { category: 'Controller', title: 'Controller is Offline/Unreachable', symptom: "Cannot access the UniFi management interface.", cause: "The hosting device (Cloud Key, UDM, server) has crashed, lost power, or lost network connectivity.", solution: "Check physical power and network connections to the host device. Attempt to ping its IP address. If it's a Cloud Key or UDM, a physical power cycle (unplug for 30 seconds) may be necessary." },
+                { category: 'Controller', title: 'UniFi OS Console Storage is Full', symptom: "The management interface is extremely slow or crashes.", cause: "Internal storage is full from Protect recordings or network statistics.", solution: "In UniFi OS settings, configure data retention for Protect to automatically delete older footage. In the Network Application, go to **Settings > System > Maintenance** and compact the database. Prune older statistics if necessary." },
+                { category: 'Controller', title: 'Configuration \"Stuck\" in a Provisioning Loop', symptom: "A device is stuck in a loop of 'Provisioning' and 'Adopting.'", cause: "Database corruption in the controller or a firmware mismatch.", solution: "Reboot the affected device. If that fails, reboot the UniFi controller. As a last resort, use the 'Forget' option for the device in the controller, factory reset the device using its physical reset button, and then re-adopt it." },
+                { category: 'Controller', title: 'Remote Access (unifi.ui.com) is Down', symptom: "Cannot manage the site remotely via the cloud portal.", cause: "The on-site console has lost its connection to Ubiquiti's cloud service, or the service itself has an outage.", solution: "Check status.ui.com for outages. Ensure the console has a valid internet connection and DNS is working. In **Settings > System > Administration**, try disabling and re-enabling Remote Access." },
+                { category: 'Controller', title: 'Statistics and Client Data are Missing', symptom: "Historical data for clients or traffic is gone.", cause: "Improper shutdown or database corruption.", solution: "Restore from the most recent automatic backup. Navigate to **Settings > System > Backups** and choose a restore point. This highlights the importance of configuring regular automated backups." },
+                { category: 'Controller', title: 'Controller Database Restore Fails', symptom: "Attempting to restore from a backup file fails with an error.", cause: "Trying to restore a backup to a different controller version or a corrupted backup file.", solution: "Ensure the new controller is running the exact same firmware/software version as the one that created the backup. Try restoring from an older backup file, as the newest one might be corrupt." },
+                { category: 'Controller', title: 'Incorrect Network Topology Map', symptom: "The topology map shows devices connected to the wrong ports or switches.", cause: "Often caused by non-UniFi switches in the network path or bugs related to Spanning Tree Protocol (STP).", solution: "This is often a cosmetic bug. Rebooting the involved switches can sometimes correct it. Ensure all switches in the path are UniFi for the most accurate topology. If a non-UniFi switch is present, this issue is likely to persist." },
+                { category: 'Controller', title: 'Controller UI SSL Certificate Error', symptom: "Browsers show a security warning when accessing the controller via its local IP.", cause: "The controller uses a self-signed certificate by default.", solution: "This is normal. You can safely click 'Proceed' or 'Accept Risk'. For a permanent fix in professional environments, you can use SSH to import a custom SSL certificate from a trusted Certificate Authority." },
+                { category: 'Controller', title: 'High CPU/Memory Usage on Controller', symptom: "The controller is slow and unresponsive, and process monitoring shows high resource usage.", cause: "A large number of clients, frequent provisioning, or a bug in the controller software.", solution: "Check for and apply any pending controller updates. Reduce data retention periods for statistics. If managing a very large site, consider migrating the controller to a host with more powerful hardware (e.g., a dedicated server)." },
+                { category: 'Controller', title: 'Alert Fatigue (False Positives)', symptom: "Receiving constant, meaningless alerts (e.g., 'STP blocking port' for a client device).", cause: "Alerting thresholds are too sensitive or misconfigured for the environment.", solution: "Navigate to **Settings > System > Notifications** and disable or customize non-critical alerts. For example, you can disable alerts for STP events or Wi-Fi experience changes unless they fall below a certain threshold." },
+                { category: 'Hardware', title: 'New/Reset Device Won\'t Appear for Adoption', symptom: "A new device is plugged in but is not discoverable by the controller.", cause: "The device is on a different VLAN/subnet than the controller.", solution: "Temporarily move the controller host device to the same VLAN/subnet as the new device for adoption. For permanent remote adoption (L3), SSH into the device and use the `set-inform http://<controller_ip>:8080/inform` command." },
+                { category: 'Hardware', title: 'Device Shows \"Managed by Other\"', symptom: "A device is greyed out and cannot be adopted.", cause: "The device needs to be factory reset before it can be adopted by a new controller.", solution: "Use a paperclip to press and hold the physical reset button on the device for 10-15 seconds until the LED flashes, indicating a reset. It will then appear as ready for adoption." },
+                { category: 'Hardware', title: 'Adoption Fails Repeatedly', symptom: "The adoption process starts but fails every time.", cause: "Firewall rules, DNS issues, or a major firmware mismatch.", solution: "Ensure the firewall on the controller's host machine allows traffic on port 8080/tcp. Make sure the device can resolve the controller's hostname. Try manually updating the device's firmware via SSH before attempting adoption again." },
+                { category: 'Hardware', title: 'AP or Switch Shows as \"Offline\"', symptom: "A working device appears offline.", cause: "Physical layer problem: bad cable, dead switch port, or PoE failure.", solution: "The 'swap-and-see' method is best. Swap the cable, then the switch port, then the PoE injector (if used). This will isolate the faulty component. Also, physically check if the device has power (look for its LED status light)." },
+                { category: 'Hardware', title: 'UDM/USG Gateway Randomly Restarts', symptom: "The main internet gateway reboots without warning.", cause: "Overheating or a failing internal power supply.", solution: "Ensure the device has adequate ventilation and is not in a hot, enclosed space. Use compressed air to clean its vents. If the problem persists, the hardware is likely failing and needs to be replaced." },
+                { category: 'Hardware', title: 'PoE Budget Exceeded on a Switch', symptom: "A new PoE device won't power on, or existing PoE devices randomly reboot.", cause: "The total power draw of connected devices exceeds the switch's maximum PoE output.", solution: "In the controller, view the power consumption for the switch. Either upgrade to a switch with a larger PoE budget or remove/relocate some PoE devices to a different switch or power them with injectors." },
+                { category: 'Hardware', title: 'SFP/SFP+ Link Issues', symptom: "A fiber or DAC link won't establish a connection or connects at a lower speed.", cause: "Incompatible SFP/SFP+ modules or incorrect port speed negotiation settings.", solution: "Use Ubiquiti-branded modules or trusted third-party ones known for compatibility. In **Devices > [Select Switch] > Ports**, manually set the SFP port speed (e.g., 1 Gbps or 10 Gbps) instead of relying on autonegotiation." },
+                { category: 'Hardware', title: 'UDM Pro/SE WAN Port Failover Not Working', symptom: "The secondary internet connection does not take over when the primary WAN fails.", cause: "Misconfigured failover policy, or the secondary WAN has its own connectivity issue.", solution: "In **Settings > Internet**, ensure the secondary WAN is configured for 'Failover Only'. Verify the secondary connection is actually live by plugging a laptop directly into it." },
+                { category: 'Hardware', title: 'Fan Noise or Failure', symptom: "A switch or gateway fan is excessively loud or has stopped spinning, potentially leading to overheating alerts.", cause: "Dust buildup or mechanical failure of the fan.", solution: "Power down the device, open the chassis (if out of warranty), and clean the fan and heatsinks with compressed air. If the fan has failed, it may need to be replaced." },
+                { category: 'Hardware', title: 'Power Supply Unit (PSU) Failure', symptom: "A rackmount device will not power on, or if it has redundant PSUs, an alert is shown for a failed unit.", cause: "End of life for the PSU component.", solution: "Replace the failed PSU. For devices with redundant power supplies, this can be done without taking the device offline (hot-swapping)." },
+                { category: 'Configuration', title: 'VLANs Not Working Correctly', symptom: "Clients on a VLAN can't get an IP or can access unauthorized networks.", cause: "Misconfigured switch port profiles or incorrect firewall rules.", solution: "Ensure the switch port connecting to the AP is set to the 'All' profile (as a trunk). Ensure the port connecting to the client is set to the correct VLAN profile (as an access port). Check firewall rules to ensure traffic from the VLAN is allowed to reach the DHCP server." },
+                { category: 'Configuration', title: 'Firewall Rules Blocking Legitimate Traffic', symptom: "A service (e.g., printer, internal server) stops working after firewall changes.", cause: "An overly restrictive rule is blocking required ports or protocols.", solution: "Review firewall rules in **Settings > Security > Firewall Rules**. Check the rule order; the first rule that matches the traffic is applied. Create a more specific 'allow' rule and place it above the general 'deny' rule." },
+                { category: 'Configuration', title: 'VPN (Site-to-Site or Client) Connection Fails', symptom: "The VPN tunnel is unstable or won't establish.", cause: "Mismatched security keys, IP address conflicts, or ISP blocking required ports.", solution: "Verify the Pre-Shared Key and all encryption/hash settings match exactly on both sides. Ensure the local networks on each side do not use the same IP subnet. Confirm with the ISP that they are not blocking IPsec or OpenVPN ports." },
+                { category: 'Configuration', title: 'Port Forwarding Isn\'t Working', symptom: "An external service rule isn't working.", cause: "'Double NAT' (two routers in a row) is the most common culprit.", solution: "Put the ISP-provided modem/router into 'bridge mode' so the UniFi gateway gets the public IP address directly. If that's not possible, you may need to set up the port forward on the ISP device to point to the UniFi gateway's WAN IP." },
+                { category: 'Configuration', title: 'Guest Portal Not Loading or Authenticating', symptom: "The guest login page doesn't appear or fails.", cause: "DNS issues on the guest network or misconfigured 'Post-Authorization Restrictions.'", solution: "In the Guest Network settings, ensure the controller's IP address is added to the 'Pre-Authorization Access' list. Ensure guest clients are receiving a valid DNS server address via DHCP." },
+                { category: 'Configuration', title: 'Threat Management (IPS/IDS) Slowing Internet', symptom: "Internet speeds drop significantly with IPS/IDS enabled.", cause: "The gateway's hardware isn't powerful enough to process traffic at line speed with these features enabled.", solution: "This is a hardware limitation. Either accept the lower throughput, upgrade to a more powerful gateway (e.g., UDM Pro/SE), or lower the threat management sensitivity level." },
+                { category: 'Configuration', title: 'IGMP Snooping/Multicast Issues', symptom: "Multicast-reliant services (some streaming devices, Sonos) don't work reliably.", cause: "IGMP Snooping is not enabled on the network.", solution: "In **Settings > Networks > [Select Network]**, enable **IGMP Snooping**. This helps the switches intelligently forward multicast traffic only to the ports that need it." },
+                { category: 'Configuration', title: 'DNS Filtering Blocking Websites', symptom: "Users report that legitimate websites are being blocked.", cause: "The DNS filtering service (e.g., OpenDNS, CleanBrowsing) configured on the WAN or LAN is overly aggressive.", solution: "In **Settings > Internet > [Select WAN]** or **Settings > Networks > [Select LAN]**, either switch to a different DNS provider or log into the filtering service's dashboard (e.g., OpenDNS) to whitelist the blocked domain." },
+                { category: 'Configuration', title: 'GeoIP Filtering Blocking Legitimate Services', symptom: "Users can't access services like Office 350 or Adobe Cloud.", cause: "The service's CDN has servers in a country that you have blocked.", solution: "In **Settings > Security > Threat Management**, review the GeoIP filtering list. Identify which country is causing the issue and unblock it, or create a firewall rule to specifically allow traffic to the required service's IP ranges." },
+                { category: 'Configuration', title: 'mDNS / Bonjour Reflector Not Working', symptom: "Services like AirPrint or Chromecast are not discoverable across different VLANs.", cause: "The mDNS service is not enabled in the UniFi controller settings.", solution: "Go to **Settings > Networks > [Select Network]** and enable the **Multicast DNS** feature. This allows mDNS discovery packets to be reflected across VLANs." },
+                { category: 'Configuration', title: 'Traffic Identification Misclassifying Apps', symptom: "The traffic stats show incorrect application usage.", cause: "Signatures are outdated or traffic is encrypted in a way UniFi cannot inspect.", solution: "Ensure the gateway's firmware is up to date, as this also updates traffic signatures. For heavily encrypted or obscure traffic, this is often an unavoidable limitation." },
+                { category: 'Applications', title: 'Protect Cameras Frequently Go Offline', symptom: "Cameras disappear and reappear in the Protect interface.", cause: "Cabling or PoE power issues.", solution: "Use a certified network cable tester to validate the cable run. Check the PoE power draw in the switch port settings. Try a different port or a higher-power PoE+ injector." },
+                { category: 'Applications', title: 'Gaps in UniFi Protect Recording Timelines', symptom: "Periods of time are missing from video footage.", cause: "Camera lost connectivity, or the NVR/console was too overloaded to write data to the disk.", solution: "Address the camera connectivity issue first (#45). If the NVR is overloaded, consider reducing the recording resolution or framerate on some cameras, or upgrading the internal hard drive to a surveillance-grade model with a faster write speed." },
+                { category: 'Applications', title: 'Protect App Fails to Connect Remotely', symptom: "Can't view cameras when away from the site.", cause: "The same issue that causes general remote access to fail.", solution: "Follow the same steps as for general remote access failure. Check status.ui.com, verify the console's internet connection, and try toggling remote access off and on." },
+                { category: 'Applications', title: 'UniFi Access Reader is Unresponsive', symptom: "The door access reader won't read a card or unlock.", cause: "Hardware failure, disconnected cable, or misconfiguration in the Access application.", solution: "Check the physical wiring between the reader and the Access Hub. Reboot the Access Hub. Review the policies and user credentials within the Access application to ensure they are configured correctly." },
+                { category: 'Applications', title: 'Poor UniFi Talk Call Quality', symptom: "Robotic voices, echoes, or dropped calls.", cause: "A Quality of Service (QoS) issue. Voice traffic is not being prioritised.", solution: "Create a separate VLAN for the Talk phones. In firewall rules, create a rule that prioritises traffic from the Voice VLAN. Ensure the UniFi gateway is handling QoS and not an upstream device." },
+                { category: 'Applications', title: 'Protect Hard Drive Failure', symptom: "The UniFi OS console reports a degraded or failed hard drive.", cause: "The HDD has reached the end of its life.", solution: "Power down the console, replace the failed hard drive with a new surveillance-grade drive (e.g., WD Purple, Seagate SkyHawk). Power the console back on and format the new drive within the UniFi OS interface." },
+                { category: 'Firmware', title: 'Unstable Beta Firmware', symptom: "New, unpredictable issues appear after updating to a beta release.", cause: "Beta firmware is for testing and not production environments.", solution: "Do not use beta firmware on production systems. Downgrade to the last known stable version. You may need to SSH into the device to manually force the downgrade." },
+                { category: 'Firmware', title: 'Device Fails to Update Firmware', symptom: "A device gets stuck on 'Updating' or fails to apply a new firmware.", cause: "Insufficient storage space on the device, or a network interruption during the download.", solution: "Reboot the device and try the update again. If it fails, SSH into the device and use the `upgrade <firmware_url>` command to perform a manual update." },
+                { category: 'Firmware', title: 'Issues After a \"Stable\" Firmware Update', symptom: "A previously stable network becomes unstable after a recommended update.", cause: "The new firmware has a regression or bug that affects your specific hardware or configuration.", solution: "Check the Ubiquiti community forums (community.ui.com) to see if others are reporting the same issue. If it's a known bug, the best solution is to downgrade to the previous stable version and wait for a fix." },
+                { category: 'Firmware', title: 'Problems Downgrading Firmware', symptom: "An attempt to revert to a previous, more stable firmware version fails.", cause: "Some updates prevent downgrading past a certain version.", solution: "This requires a manual downgrade via SSH. Find the firmware .bin file on Ubiquiti's download page, SSH into the device, and use the `upgrade` command. This should be done with caution." },
+                { category: 'Firmware', title: 'Staged Rollout Complications', symptom: "Some APs get a new firmware version while others don't, causing inconsistent behavior.", cause: "This is an intentional feature by Ubiquiti to limit the impact of a bad firmware.", solution: "Be aware this can happen. You can force the update on all devices by going to the Devices tab, enabling the 'Firmware' column, and clicking the update button for each device that hasn't updated yet." },
+                { category: 'ISP & External', title: 'Double NAT', symptom: "Port forwarding, UPnP, and some VPNs don't work. The UniFi gateway has a private IP on its WAN port.", cause: "The ISP-provided modem is also a router and has not been put into 'bridge mode.'", solution: "Contact the ISP and ask them to put their device into 'bridge' or 'IP Passthrough' mode. This will pass the public IP address directly to your UniFi gateway." },
+                { category: 'ISP & External', title: 'Upstream Packet Loss', symptom: "The entire network experiences random slowness and disconnects, but internal network traffic is fine.", cause: "A problem with the ISP's network outside of your control.", solution: "Use a tool like PingPlotter or WinMTR from a wired computer to trace the route to a reliable server (like google.com). If the packet loss starts at a hop after your gateway, send this data to your ISP as proof of the issue." },
+                { category: 'ISP & External', title: 'Carrier-Grade NAT (CG-NAT)', symptom: "You have no public IPv4 address, making remote access and port forwarding impossible.", cause: "The ISP shares a single public IP among many customers.", solution: "Contact your ISP and request a static public IPv4 address. This may come with an additional monthly fee but is the only reliable solution." },
+                { category: 'ISP & External', title: 'ISP DNS Servers are Unreliable', symptom: "Websites intermittently fail to load for all users.", cause: "The default DNS servers from the ISP are slow or faulty.", solution: "In **Settings > Internet > [Select WAN]**, manually set the DNS servers to a reliable public provider like Cloudflare (1.1.1.1, 1.0.0.1) or Google (8.8.8.8, 8.8.4.4)." },
+                { category: 'Multi-Site', title: 'Site-to-Site VPN Flapping', symptom: "A VPN tunnel between two UniFi sites connects and disconnects repeatedly.", cause: "Unstable internet on one side, or IP address conflicts between the local networks.", solution: "Address any internet stability issues first (#57). Ensure that the local subnets on both sides of the VPN are different (e.g., Site A uses 192.168.1.0/24, Site B uses 192.168.2.0/24)." },
+                { category: 'Multi-Site', title: 'Global Dashboard Anomalies', symptom: "When viewing all sites in a multi-site controller, the aggregate client/device count is incorrect.", cause: "A bug in the controller UI.", solution: "This is typically a cosmetic issue. Clearing your browser cache or restarting the UniFi controller application can sometimes resolve it. It does not affect network performance." },
+                { category: 'Multi-Site', title: 'Configuration Sync Issues on Self-Hosted Controller', symptom: "Changes made in a central controller are not being applied to devices at a remote site.", cause: "The remote devices cannot reach the controller's inform URL due to firewall or DNS issues.", solution: "From the remote site, try to ping the controller's public IP or hostname. Ensure that the firewall at the controller's location allows inbound traffic on port 8080/tcp. You may need to SSH into a remote device and manually run the `set-inform` command to re-establish the connection." }
+            ];
+            
+            // Use Promise.all to add all documents in parallel for speed.
+            const promises = initialIssues.map(issue => addDoc(issuesCollectionRef, issue));
+            await Promise.all(promises);
+            console.log("Database seeded successfully!");
+        }
+
+        /**
+         * Handles the submission of the 'Add Issue' form.
+         */
+        async function handleAddIssue(event) {
+            event.preventDefault();
+            const newIssue = {
+                title: document.getElementById('new-title').value,
+                category: document.getElementById('new-category').value,
+                symptom: document.getElementById('new-symptom').value,
+                cause: document.getElementById('new-cause').value,
+                solution: document.getElementById('new-solution').value,
+            };
+
+            try {
+                await addDoc(issuesCollectionRef, newIssue);
+                closeModal('add-issue-modal');
+                document.getElementById('add-issue-form').reset();
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert("Could not save the new issue. Please try again.");
+            }
+        }
+
+
+        // --- UI RENDERING --- (Functions to display data)
+
+        function formatSolution(text) {
+            return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        function renderFilters() {
+            if (allIssues.length === 0) return;
+            const categories = ['All', ...new Set(allIssues.map(issue => issue.category).sort())];
+            const filterContainer = document.getElementById('filter-container');
+            filterContainer.innerHTML = categories.map(category => `
+                <button 
+                    class="filter-btn w-full text-left px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-colors ${category === activeCategory ? 'active' : ''}"
+                    onclick="window.setCategoryFilter('${category}')">
+                    ${category}
+                </button>
+            `).join('');
+        }
+
+        function renderResults() {
+            if (allIssues.length === 0 && !document.getElementById('results-summary').textContent.includes('Seeding')) {
+                 document.getElementById('results-summary').textContent = 'No issues in the database yet.';
+                 return;
+            }
+
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const resultsGrid = document.getElementById('results-grid');
+            const resultsSummary = document.getElementById('results-summary');
+            const noResults = document.getElementById('no-results');
+            
+            const filteredIssues = allIssues.filter(issue => {
+                const inCategory = activeCategory === 'All' || issue.category === activeCategory;
+                const matchesSearch = searchTerm === '' ||
+                    Object.values(issue).some(val => 
+                        String(val).toLowerCase().includes(searchTerm)
+                    );
+                return inCategory && matchesSearch;
+            });
+
+            resultsGrid.innerHTML = '';
+
+            if (filteredIssues.length > 0) {
+                noResults.classList.add('hidden');
+                resultsGrid.classList.remove('hidden');
+                filteredIssues.forEach(issue => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-5 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between';
+                    card.onclick = () => window.openDetailModal(issue.id);
+                    card.innerHTML = `
+                        <div>
+                            <span class="inline-block bg-teal-100 text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full mb-2">${issue.category}</span>
+                            <h3 class="font-bold text-slate-800">${issue.title}</h3>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-2 line-clamp-2">${issue.symptom}</p>
+                    `;
+                    resultsGrid.appendChild(card);
+                });
+            } else {
+                noResults.classList.remove('hidden');
+                resultsGrid.classList.add('hidden');
+            }
+            
+            resultsSummary.textContent = `Showing ${filteredIssues.length} of ${allIssues.length} total issues.`;
+        }
+
+        function renderChart() {
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            if (allIssues.length === 0) return;
+
+            const ctx = document.getElementById('category-chart').getContext('2d');
+            const categoryCounts = allIssues.reduce((acc, issue) => {
+                acc[issue.category] = (acc[issue.category] || 0) + 1;
+                return acc;
+            }, {});
+
+            const sortedCategories = Object.entries(categoryCounts).sort(([,a],[,b]) => b-a);
+            const labels = sortedCategories.map(entry => entry[0]);
+            const data = sortedCategories.map(entry => entry[1]);
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Issues',
+                        data: data,
+                        backgroundColor: '#94a3b8',
+                        borderColor: '#64748b',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { beginAtZero: true, grid: { display: false } },
+                        y: { grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const chartElement = elements[0];
+                            const label = chartInstance.data.labels[chartElement.index];
+                            window.setCategoryFilter(label);
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- MODAL & EVENT HANDLING --- (Functions to control UI interactions)
+
+        window.setCategoryFilter = (category) => {
+            activeCategory = category;
+            renderFilters();
+            renderResults();
+            
+            if (chartInstance) {
+                const categoryIndex = chartInstance.data.labels.indexOf(category);
+                const meta = chartInstance.getDatasetMeta(0);
+                
+                meta.data.forEach((bar, index) => {
+                    bar.options.backgroundColor = (index === categoryIndex || category === 'All') ? '#0d9488' : '#94a3b8';
+                });
+                chartInstance.update();
+            }
+        }
+
+        window.openDetailModal = (id) => {
+            const issue = allIssues.find(i => i.id === id);
+            if (!issue) return;
+
+            document.getElementById('modal-title').textContent = issue.title;
+            document.getElementById('modal-symptom').textContent = issue.symptom;
+            document.getElementById('modal-cause').textContent = issue.cause;
+            document.getElementById('modal-solution').innerHTML = formatSolution(issue.solution);
+            
+            openModal('detail-modal');
+        }
+
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('modal-hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        window.closeModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('modal-hidden');
+            document.body.style.overflow = 'auto';
+        }
+        
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeModal('detail-modal');
+                closeModal('add-issue-modal');
+            }
+        });
+        
+        // Close modal if background is clicked
+        document.getElementById('detail-modal').addEventListener('click', () => closeModal('detail-modal'));
+        document.getElementById('add-issue-modal').addEventListener('click', () => closeModal('add-issue-modal'));
+
+
+    </script>
+</body>
+</html>
